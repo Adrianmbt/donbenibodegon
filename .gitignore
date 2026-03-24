@@ -1,0 +1,29 @@
+# Entorno virtual
+venv/
+
+# Variables de entorno (¡NUNCA subir al repositorio!)
+.env
+
+# Cache de Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Archivos de IDE
+.vscode/
+.idea/
+
+# JavaScript y Node
+node_modules/
+dist/
+frontend/dist/
+dist-electron/
+
+# Otros
+temp_pdfs/
+backups/
+*.log
+*.tmp
+test_output.pdf
+bodegon_db.dump

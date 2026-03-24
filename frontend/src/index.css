@@ -1,0 +1,71 @@
+@import "tailwindcss";
+@import url('https://fonts.googleapis.com/css2?family=Manrope:wght@200;300;400;500;600;700;800&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap');
+
+@theme {
+  /* Marca Don Beni: Oro y Azul/Negro Profundo */
+  --color-primary: #D4AF37;           /* Oro del Logo */
+  --color-primary-container: #F4D03F; /* Oro más brillante */
+  --color-on-primary: #000000;
+  
+  --color-secondary: #FFC107;         /* Ámbar/Oro fuerte */
+  --color-secondary-container: #5D4037;
+  
+  /* Fondos Basados en el Azul Oscuro del Logo */
+  --color-background: #050810;        /* Casi Negro Azulado */
+  --color-surface: #0B132B;           /* Azul Profundo del Logo */
+  --color-surface-container: #1C2541; /* Variante más clara de azul */
+  --color-surface-container-low: #0B132B;
+  --color-surface-container-high: #3A506B;
+  --color-surface-container-highest: #5BC0BE;
+  --color-on-surface: #E5E2E1;
+  --color-on-surface-variant: #8794A8;
+
+  --color-error: #FF4D4D;
+  --color-outline-variant: #1C2541;
+
+  --font-headline: "Manrope", sans-serif;
+  --font-body: "Manrope", sans-serif;
+  --font-label: "Manrope", sans-serif;
+  
+  --radius-default: 0.25rem;
+  --radius-lg: 0.5rem;
+  --radius-xl: 1rem;
+  --radius-full: 9999px;
+}
+
+
+body { 
+    font-family: 'Manrope', sans-serif; 
+}
+
+.material-symbols-outlined {
+    font-family: 'Material Symbols Outlined' !important;
+    font-weight: normal;
+    font-style: normal;
+    font-size: 24px;
+    line-height: 1;
+    letter-spacing: normal;
+    text-transform: none;
+    display: inline-block;
+    white-space: nowrap;
+    word-wrap: normal;
+    direction: ltr;
+    -webkit-font-feature-settings: 'liga';
+    font-feature-settings: 'liga';
+    -webkit-font-smoothing: antialiased;
+    font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+}
+
+@keyframes dropdownIn {
+    from { opacity: 0; transform: translateY(-10px) scale(0.95); }
+    to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.animate-dropdown-in {
+    animation: dropdownIn 0.3s ease-out forwards;
+}
+
+::-webkit-scrollbar { width: 4px; }
+::-webkit-scrollbar-track { background: #131313; }
+::-webkit-scrollbar-thumb { background: #3e4a3f; border-radius: 10px; }
