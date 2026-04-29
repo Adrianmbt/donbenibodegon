@@ -7,9 +7,17 @@ const Dashboard = () => {
   const navigate = useNavigate();
 
   useEffect(() => {
-    fetch("/api/dashboard/resumen-ejecutivo")
+    fetch("/api/dashboard/resumen-ejecutivo", {
+      headers: { "Authorization": `Bearer ${localStorage.getItem("token")}` }
+    })
       .then(res => res.json())
-      .then(d => setData(d))
+      .then(d => {
+        if (d && !d.detail) {
+          setData(d);
+        } else {
+          console.error("Error en dashboard:", d?.detail);
+        }
+      })
       .catch(e => console.error(e))
       .finally(() => setLoading(false));
   }, []);

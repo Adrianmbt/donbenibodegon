@@ -6,7 +6,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from contextlib import asynccontextmanager
 from app.database import init_db
 import os
-from app.routes import bcv, inventario, usuarios, ventas, finanzas, compras, proveedores, dashboard, dev
+from app.routes import bcv, inventario, usuarios, ventas, finanzas, compras, proveedores, dashboard, dev, tiendas
 
 dist_path = os.path.join(os.path.dirname(__file__), "frontend", "dist")
 
@@ -35,6 +35,7 @@ app.include_router(compras.router, prefix="/api")
 app.include_router(proveedores.router, prefix="/api")
 app.include_router(dashboard.router, prefix="/api")
 app.include_router(dev.router, prefix="/api")
+app.include_router(tiendas.router, prefix="/api")
 
 # ── ARCHIVOS ESTÁTICOS ──────────────────────────────────────
 assets_path = os.path.join(dist_path, "assets")

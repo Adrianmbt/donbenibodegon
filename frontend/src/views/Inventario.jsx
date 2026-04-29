@@ -29,7 +29,9 @@ const Inventario = () => {
   const fetchProductos = async () => {
     try {
       setLoading(true);
-      const response = await fetch("/api/inventario/productos");
+      const response = await fetch("/api/inventario/productos", {
+        headers: { "Authorization": `Bearer ${localStorage.getItem("token")}` }
+      });
       if (!response.ok) throw new Error("Error al cargar productos");
       const data = await response.json();
       setProductos(data);
@@ -43,9 +45,10 @@ const Inventario = () => {
 
   const fetchCatalogos = async () => {
     try {
+      const headers = { "Authorization": `Bearer ${localStorage.getItem("token")}` };
       const [resCat, resProv] = await Promise.all([
-        fetch("/api/inventario/categorias"),
-        fetch("/api/proveedores/")
+        fetch("/api/inventario/categorias", { headers }),
+        fetch("/api/proveedores/", { headers })
       ]);
       if (resCat.ok) setCategorias(await resCat.json());
       if (resProv.ok) setProveedores(await resProv.json());
@@ -57,11 +60,15 @@ const Inventario = () => {
     try {
       const res = await fetch("/api/inventario/categorias", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { 
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${localStorage.getItem("token")}`
+        },
         body: JSON.stringify({ nombre: nuevaCategoria })
       });
       if (res.ok) {
         setNuevaCategoria("");
+        setModalCatOpen(false);
         fetchCatalogos();
       }
     } catch (e) { console.error(e); }
@@ -70,7 +77,10 @@ const Inventario = () => {
   const handleDeleteCategoria = async (id) => {
     if (!window.confirm("¿Seguro que deseas eliminar esta categoría?")) return;
     try {
-      const res = await fetch(`/api/inventario/categorias/${id}`, { method: "DELETE" });
+      const res = await fetch(`/api/inventario/categorias/${id}`, { 
+        method: "DELETE",
+        headers: { "Authorization": `Bearer ${localStorage.getItem("token")}` }
+      });
       if (res.ok) fetchCatalogos();
       else alert("No se puede eliminar (podría tener productos vinculados)");
     } catch (e) { console.error(e); }
@@ -81,20 +91,6 @@ const Inventario = () => {
     fetchCatalogos();
   }, []);
 
-  const handleOpenModal = (prod = null) => {
-    if (prod) {
-      setEditando(prod.id);
-      setForm({ ...prod });
-    } else {
-      setEditando(null);
-      setForm({ 
-        nombre: "", barcode: "", precio_usd: 1.0, costo_usd: 0.5, stock: 0, stock_minimo: 5, 
-        categoria_id: categorias[0]?.id || "", proveedor_id: proveedores[0]?.id || "",
-        es_licor: false, unidades_por_caja: 12, precio_caja_usd: 10.0
-      });
-    }
-    setModalOpen(true);
-  };
 
   const handleSave = async (e) => {
     e.preventDefault();
@@ -130,12 +126,12 @@ const Inventario = () => {
   };
 
   let productosFiltrados = productos.filter((p) =>
-    p.nombre.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    p.barcode.includes(searchQuery)
+    p.producto?.nombre?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    p.producto?.barcode?.includes(searchQuery)
   );
 
   if (filterParam === "critical") {
-      productosFiltrados = productosFiltrados.filter(p => p.stock <= 5);
+      productosFiltrados = productosFiltrados.filter(p => p.stock <= p.stock_minimo);
   }
 
   // Paginación
@@ -145,6 +141,28 @@ const Inventario = () => {
 
   const goToPage = (page) => {
     if (page >= 1 && page <= totalPages) setCurrentPage(page);
+  };
+
+  const handleOpenModal = (pt = null) => {
+    if (pt) {
+      setEditando(pt.producto_id);
+      setForm({ 
+        ...pt.producto,
+        stock: pt.stock,
+        precio_usd: pt.precio_usd,
+        precio_caja_usd: pt.precio_caja_usd,
+        stock_minimo: pt.stock_minimo,
+        activo: pt.activo
+      });
+    } else {
+      setEditando(null);
+      setForm({ 
+        nombre: "", barcode: "", precio_usd: 0.0, costo_usd: 0.0, stock: 0, stock_minimo: 5, 
+        categoria_id: categorias[0]?.id || "", proveedor_id: proveedores[0]?.id || "",
+        es_licor: false, unidades_por_caja: 1, precio_caja_usd: 0.0
+      });
+    }
+    setModalOpen(true);
   };
 
   return (
@@ -243,31 +261,31 @@ const Inventario = () => {
                   </td>
                 </tr>
               ) : (
-                currentItems.map((producto) => (
-                  <tr key={producto.id} className="group hover:bg-surface-container/50 transition-colors">
+                currentItems.map((item) => (
+                  <tr key={item.id} className="group hover:bg-surface-container/50 transition-colors">
                     <td className="px-8 py-5">
-                      <div className="font-bold text-on-surface">{producto.nombre}</div>
+                      <div className="font-bold text-on-surface">{item.producto?.nombre}</div>
                       <div className="text-[10px] text-on-surface-variant/60 uppercase tracking-widest mt-1">
-                        ID: #{producto.id} | <span className="text-primary/70">{categorias.find(c => c.id === producto.categoria_id)?.nombre || "Sin Cat."}</span>
+                        ID: #{item.producto_id} | <span className="text-primary/70">{categorias.find(c => c.id === item.producto?.categoria_id)?.nombre || "Sin Cat."}</span>
                       </div>
                     </td>
                     <td className="px-8 py-5 font-mono text-xs text-on-surface-variant">
-                      {producto.barcode}
+                      {item.producto?.barcode}
                     </td>
                     <td className="px-8 py-5 text-center">
-                      <span className={`font-mono font-bold text-lg ${producto.stock <= 5 ? 'text-error' : 'text-primary'}`}>
-                        {producto.stock}
+                      <span className={`font-mono font-bold text-lg ${item.stock <= item.stock_minimo ? 'text-error' : 'text-primary'}`}>
+                        {item.stock}
                       </span>
                     </td>
                     <td className="px-8 py-5 text-right font-mono font-bold text-secondary">
-                      ${producto.precio_usd.toFixed(2)}
+                      ${item.precio_usd.toFixed(2)}
                     </td>
                     <td className="px-8 py-5 text-right">
-                      {producto.stock <= 0 ? (
+                      {item.stock <= 0 ? (
                         <span className="bg-error/10 text-error px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest">
                           Agotado
                         </span>
-                      ) : producto.stock <= 5 ? (
+                      ) : item.stock <= item.stock_minimo ? (
                         <span className="bg-secondary/10 text-secondary px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest">
                           Stock Bajo
                         </span>
@@ -280,13 +298,13 @@ const Inventario = () => {
                     <td className="px-8 py-5 text-center">
                       <div className="flex justify-center gap-2">
                         <button 
-                          onClick={() => handleOpenModal(producto)}
+                          onClick={() => handleOpenModal(item)}
                           className="text-on-surface-variant hover:text-primary p-2 rounded-lg transition-colors"
                         >
                           <span className="material-symbols-outlined text-lg">edit</span>
                         </button>
                         <button 
-                          onClick={() => handleDelete(producto.id)}
+                          onClick={() => handleDelete(item.producto_id)}
                           className="text-on-surface-variant hover:text-error p-2 rounded-lg transition-colors"
                         >
                           <span className="material-symbols-outlined text-lg">delete</span>
@@ -330,7 +348,7 @@ const Inventario = () => {
           </div>
           <p className="text-[10px] uppercase tracking-[0.2em] text-on-surface-variant/60 font-bold mb-2">Stock Bajo / Crítico</p>
           <p className="text-4xl font-bold font-mono text-secondary">
-            {productos.filter(p => p.stock <= 5).length}
+            {productos.filter(p => p.stock <= p.stock_minimo).length}
           </p>
         </div>
         <div className="bg-surface-container-low p-8 rounded-2xl border border-outline-variant/10 shadow-lg relative overflow-hidden group border-l-4 border-primary/40">

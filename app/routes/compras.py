@@ -1,7 +1,8 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlmodel import Session, select
 from app.database import get_session
-from app.models import Producto, CuentaPorPagar, Proveedor
+from app.models import Producto, CuentaPorPagar, Proveedor, ProductoTienda, Tienda
+from app.routes.usuarios import obtener_usuario_actual
 from pydantic import BaseModel
 from typing import List
 from datetime import datetime
@@ -21,7 +22,15 @@ class CompraRequest(BaseModel):
     monto_total_usd: float
 
 @router.post("/registrar", status_code=201)
-def registrar_compra(req: CompraRequest, session: Session = Depends(get_session)):
+def registrar_compra(
+    req: CompraRequest, 
+    session: Session = Depends(get_session),
+    usuario: dict = Depends(obtener_usuario_actual)
+):
+    tienda_id = usuario["tienda_id"]
+    if not tienda_id:
+        raise HTTPException(status_code=403, detail="Debes estar asignado a una tienda para registrar compras")
+
     # 1. Verificar proveedor
     proveedor = session.get(Proveedor, req.proveedor_id)
     if not proveedor:
@@ -29,29 +38,51 @@ def registrar_compra(req: CompraRequest, session: Session = Depends(get_session)
 
     # 2. Procesar cada item (Mercancía)
     for item in req.items:
+        # Actualizamos el catálogo global (costo)
         prod = session.get(Producto, item.producto_id)
         if not prod:
              raise HTTPException(status_code=404, detail=f"Producto ID {item.producto_id} no encontrado")
         
+        # Buscamos o creamos el registro de la tienda
+        pt = session.exec(
+            select(ProductoTienda).where(
+                ProductoTienda.producto_id == item.producto_id,
+                ProductoTienda.tienda_id == tienda_id
+            )
+        ).first()
+        
+        if not pt:
+            # Si no existe en la tienda, lo creamos
+            pt = ProductoTienda(
+                producto_id=item.producto_id,
+                tienda_id=tienda_id,
+                stock=0,
+                precio_usd=prod.costo_usd * 1.3 # Margen sugerido del 30% por defecto
+            )
+            session.add(pt)
+            session.flush()
+
         # Calcular unidades totales a añadir
         unidades_a_añadir = item.cantidad
         if item.es_caja and prod.es_licor:
             unidades_a_añadir = item.cantidad * prod.unidades_por_caja
             
-        # Actualizar inventario (entrada)
-        prod.stock += unidades_a_añadir
-        # Actualizar costo base (si es caja, promediamos el costo por unidad para el registro individual)
+        # Actualizar inventario de LA TIENDA
+        pt.stock += unidades_a_añadir
+        
+        # Actualizar costo base GLOBAL
         if item.es_caja and prod.es_licor:
             prod.costo_usd = item.costo_unitario_usd / prod.unidades_por_caja
         else:
             prod.costo_usd = item.costo_unitario_usd
             
         session.add(prod)
+        session.add(pt)
 
     # 3. Generar Registro de Cuenta (CxP)
-    # Si es crédito queda 'pendiente', si es contado queda 'pagado'
     nueva_cxp = CuentaPorPagar(
         proveedor_id=proveedor.id,
+        tienda_id=tienda_id,
         monto_total=req.monto_total_usd,
         monto_pendiente=0.0 if req.metodo_pago.lower() == "contado" else req.monto_total_usd,
         estado="pagado" if req.metodo_pago.lower() == "contado" else "pendiente",
@@ -69,9 +100,14 @@ from reportlab.lib.pagesizes import letter
 import os
 
 @router.get("/pdf/{compra_id}")
-def descargar_pdf_compra(compra_id: int, session: Session = Depends(get_session)):
+def descargar_pdf_compra(
+    compra_id: int, 
+    session: Session = Depends(get_session),
+    usuario: dict = Depends(obtener_usuario_actual)
+):
+    tienda_id = usuario["tienda_id"]
     compra = session.get(CuentaPorPagar, compra_id)
-    if not compra:
+    if not compra or (usuario["rol"] not in ["dev", "propietario"] and compra.tienda_id != tienda_id):
         raise HTTPException(status_code=404, detail="Compra no encontrada")
     
     prov = session.get(Proveedor, compra.proveedor_id)
@@ -83,7 +119,7 @@ def descargar_pdf_compra(compra_id: int, session: Session = Depends(get_session)
     
     c = canvas.Canvas(path, pagesize=letter)
     c.setFont("Helvetica-Bold", 16)
-    c.drawString(100, 750, "DON BENI - HOJA DE RECEPCIÓN")
+    c.drawString(100, 750, f"DON BENI - RECEPCIÓN MERCANCÍA")
     c.setFont("Helvetica", 12)
     c.drawString(100, 730, f"Comprobante ID: {compra_id}")
     c.drawString(100, 715, f"Fecha: {compra.fecha_emision.strftime('%d/%m/%Y %H:%M')}")
@@ -100,21 +136,34 @@ def descargar_pdf_compra(compra_id: int, session: Session = Depends(get_session)
     
     c.save()
     
-    headers = {
-        "Content-Disposition": f"attachment; filename=Recibo_DonBeni_{compra_id}.pdf"
-    }
-    return FileResponse(path, filename=f"Recibo_DonBeni_{compra_id}.pdf", media_type="application/pdf", headers=headers)
+    headers = {"Content-Disposition": f"attachment; filename=Recibo_Compra_{compra_id}.pdf"}
+    return FileResponse(path, filename=f"Recibo_Compra_{compra_id}.pdf", media_type="application/pdf", headers=headers)
 
 @router.get("/historial")
-def historial_compras(session: Session = Depends(get_session)):
-    # Retornamos todas las facturas de proveedores (contado y crédito) para auditoría
-    return session.exec(select(CuentaPorPagar).order_by(CuentaPorPagar.id.desc())).all()
+def historial_compras(
+    session: Session = Depends(get_session),
+    usuario: dict = Depends(obtener_usuario_actual)
+):
+    tienda_id = usuario["tienda_id"]
+    rol = usuario["rol"]
+    
+    statement = select(CuentaPorPagar).order_by(CuentaPorPagar.id.desc())
+    if rol not in ["dev", "propietario"] and tienda_id:
+        statement = statement.where(CuentaPorPagar.tienda_id == tienda_id)
+        
+    return session.exec(statement).all()
 
 @router.delete("/{compra_id}")
-def eliminar_compra(compra_id: int, session: Session = Depends(get_session)):
+def eliminar_compra(
+    compra_id: int, 
+    session: Session = Depends(get_session),
+    usuario: dict = Depends(obtener_usuario_actual)
+):
+    tienda_id = usuario["tienda_id"]
     compra = session.get(CuentaPorPagar, compra_id)
-    if not compra:
+    if not compra or (usuario["rol"] not in ["dev", "propietario"] and compra.tienda_id != tienda_id):
         raise HTTPException(status_code=404, detail="Compra no encontrada")
+    
     session.delete(compra)
     session.commit()
     return {"status": "Compra eliminada exitosamente"}
@@ -125,9 +174,15 @@ class CompraUpdate(BaseModel):
     estado: str | None = None
 
 @router.patch("/{compra_id}")
-def actualizar_compra(compra_id: int, req: CompraUpdate, session: Session = Depends(get_session)):
+def actualizar_compra(
+    compra_id: int, 
+    req: CompraUpdate, 
+    session: Session = Depends(get_session),
+    usuario: dict = Depends(obtener_usuario_actual)
+):
+    tienda_id = usuario["tienda_id"]
     compra = session.get(CuentaPorPagar, compra_id)
-    if not compra:
+    if not compra or (usuario["rol"] not in ["dev", "propietario"] and compra.tienda_id != tienda_id):
         raise HTTPException(status_code=404, detail="Compra no encontrada")
     
     if req.monto_total is not None:

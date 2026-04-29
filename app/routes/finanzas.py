@@ -1,7 +1,8 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlmodel import Session, select, func
 from app.database import get_session
-from app.models import Venta, Producto, CuentaPorPagar, CuentaPorCobrar, ExchangeRate
+from app.models import Venta, Producto, CuentaPorPagar, CuentaPorCobrar, ExchangeRate, ProductoTienda
+from app.routes.usuarios import obtener_usuario_actual
 from datetime import datetime
 from fastapi.responses import FileResponse
 from reportlab.pdfgen import canvas
@@ -11,22 +12,42 @@ import os
 router = APIRouter(prefix="/finanzas", tags=["Finanzas e Impuestos"])
 
 @router.get("/stats")
-def obtener_estadisticas_generales(session: Session = Depends(get_session)):
+def obtener_estadisticas_generales(
+    session: Session = Depends(get_session),
+    usuario: dict = Depends(obtener_usuario_actual)
+):
     """
-    Calcula Activos (Inventario + CxC), Deudas (CxP) y Patrimonio.
+    Calcula Activos (Inventario + CxC), Deudas (CxP) y Patrimonio de la TIENDA ACTUAL.
     """
-    # 1. Valor de Inventario (Activo Corriente)
-    productos = session.exec(select(Producto)).all()
-    valor_inventario = sum(p.stock * p.costo_usd for p in productos)
+    tienda_id = usuario.get("tienda_id")
+    if not tienda_id:
+        return {
+            "valor_inventario": 0, "cuentas_por_cobrar": 0, "cuentas_por_pagar": 0,
+            "ventas_totales": 0, "activos_totales": 0, "patrimonio_neto": 0,
+            "tasa_bcv": 0, "moneda": "USD"
+        }
+
+    # 1. Valor de Inventario (Activo Corriente) - USAR PRODUCTOTIENDA
+    pts = session.exec(select(ProductoTienda).where(ProductoTienda.tienda_id == tienda_id)).all()
+    valor_inventario = sum(pt.stock * pt.producto.costo_usd for pt in pts if pt.producto)
     
     # 2. Cuentas por Cobrar (Activo)
-    cxc_total = session.exec(select(func.sum(CuentaPorCobrar.monto_pendiente))).one() or 0.0
+    cxc_total = session.exec(
+        select(func.sum(CuentaPorCobrar.monto_pendiente))
+        .where(CuentaPorCobrar.tienda_id == tienda_id)
+    ).one() or 0.0
     
     # 3. Cuentas por Pagar (Pasivo/Deuda)
-    cxp_total = session.exec(select(func.sum(CuentaPorPagar.monto_pendiente))).one() or 0.0
+    cxp_total = session.exec(
+        select(func.sum(CuentaPorPagar.monto_pendiente))
+        .where(CuentaPorPagar.tienda_id == tienda_id)
+    ).one() or 0.0
     
     # 4. Ventas Totales (Histórico)
-    ventas_totales = session.exec(select(func.sum(Venta.total_usd))).one() or 0.0
+    ventas_totales = session.exec(
+        select(func.sum(Venta.total_usd))
+        .where(Venta.tienda_id == tienda_id)
+    ).one() or 0.0
     
     # 5. Patrimonio (Activos - Pasivos)
     activos_totales = valor_inventario + cxc_total
@@ -48,13 +69,16 @@ def obtener_estadisticas_generales(session: Session = Depends(get_session)):
     }
 
 @router.get("/reporte-pdf")
-async def generar_reporte_patrimonial(session: Session = Depends(get_session)):
-    stats = obtener_estadisticas_generales(session)
+async def generar_reporte_patrimonial(
+    session: Session = Depends(get_session),
+    usuario: dict = Depends(obtener_usuario_actual)
+):
+    stats = obtener_estadisticas_generales(session, usuario)
     
     tasa = session.exec(select(ExchangeRate).order_by(ExchangeRate.id.desc())).first()
     rate = tasa.rate if tasa else 457.07
     
-    filename = "reporte_patrimonial.pdf"
+    filename = f"reporte_patrimonial_tienda_{usuario.get('tienda_id')}.pdf"
     path = os.path.join("temp_pdfs", filename)
     os.makedirs("temp_pdfs", exist_ok=True)
     
@@ -62,7 +86,7 @@ async def generar_reporte_patrimonial(session: Session = Depends(get_session)):
     
     # Encabezado
     c.setFont("Helvetica-Bold", 18)
-    c.drawString(50, 750, "DON BENI - REPORTE FINANCIERO")
+    c.drawString(50, 750, "DON BENI - REPORTE FINANCIERO SEDE")
     c.setFont("Helvetica", 10)
     c.drawString(50, 735, f"Fecha de Emisión: {datetime.now().strftime('%d/%m/%Y %H:%M:%S')}")
     c.drawString(50, 720, f"Moneda de Referencia: USD ($)")
@@ -75,7 +99,7 @@ async def generar_reporte_patrimonial(session: Session = Depends(get_session)):
     c.drawString(50, y, "1. ACTIVOS (BIENES Y DERECHOS)")
     y -= 25
     c.setFont("Helvetica", 12)
-    c.drawString(70, y, f"Valor de Inventario: ${stats['valor_inventario']:.2f}")
+    c.drawString(70, y, f"Valor de Inventario Sede: ${stats['valor_inventario']:.2f}")
     y -= 15
     c.drawString(70, y, f"Cuentas por Cobrar (Clientes): ${stats['cuentas_por_cobrar']:.2f}")
     y -= 20
@@ -109,29 +133,36 @@ async def generar_reporte_patrimonial(session: Session = Depends(get_session)):
     c.drawString(50, y, "Resumen de Ventas Históricas:")
     y -= 20
     c.setFont("Helvetica", 12)
-    c.drawString(70, y, f"Monto Total de Ventas Procesadas: ${stats['ventas_totales']:.2f}")
+    c.drawString(70, y, f"Monto Total de Ventas Procesadas en Sede: ${stats['ventas_totales']:.2f}")
     
     c.save()
     
     headers = {
-        "Content-Disposition": "attachment; filename=Reporte_Financiero_DonBeni.pdf"
+        "Content-Disposition": f"attachment; filename={filename}"
     }
-    return FileResponse(path, filename="Reporte_Financiero_DonBeni.pdf", media_type="application/pdf", headers=headers)
+    return FileResponse(path, filename=filename, media_type="application/pdf", headers=headers)
 
 @router.get("/declaracion-ingresos-mensual")
-async def generar_declaracion_mensual(session: Session = Depends(get_session)):
+async def generar_declaracion_mensual(
+    session: Session = Depends(get_session),
+    usuario: dict = Depends(obtener_usuario_actual)
+):
+    tienda_id = usuario.get("tienda_id")
     now = datetime.now()
     inicio_mes = datetime(now.year, now.month, 1)
     
-    # Ventas del mes
-    ventas = session.exec(select(Venta).where(Venta.fecha >= inicio_mes)).all()
+    # Ventas del mes filtradas por tienda
+    ventas = session.exec(
+        select(Venta)
+        .where(Venta.fecha >= inicio_mes, Venta.tienda_id == tienda_id)
+    ).all()
     total_usd = sum(v.total_usd for v in ventas)
     
     tasa = session.exec(select(ExchangeRate).order_by(ExchangeRate.id.desc())).first()
     rate = tasa.rate if tasa else 457.07
     total_ves = total_usd * rate
     
-    filename = f"declaracion_ingresos_{now.month}_{now.year}.pdf"
+    filename = f"declaracion_ingresos_tienda_{tienda_id}_{now.month}_{now.year}.pdf"
     path = os.path.join("temp_pdfs", filename)
     os.makedirs("temp_pdfs", exist_ok=True)
     

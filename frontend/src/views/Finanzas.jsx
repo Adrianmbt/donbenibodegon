@@ -10,9 +10,15 @@ const Finanzas = () => {
 
   const fetchStats = async () => {
     try {
-      const res = await fetch("/api/finanzas/stats");
+      const res = await fetch("/api/finanzas/stats", {
+        headers: { "Authorization": `Bearer ${localStorage.getItem("token")}` }
+      });
       const data = await res.json();
-      setStats(data);
+      if (!data.detail) {
+        setStats(data);
+      } else {
+        console.error("Error en finanzas:", data.detail);
+      }
     } catch (e) {
       console.error("Error cargando finanzas:", e);
     } finally {
@@ -20,23 +26,29 @@ const Finanzas = () => {
     }
   };
 
-  const downloadPDF = () => {
-    const a = document.createElement('a');
-    a.href = `/api/finanzas/reporte-pdf`;
-    a.download = `Reporte_Patrimonial_DonBeni.pdf`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
+  const downloadFile = async (url, filename) => {
+    try {
+      const response = await fetch(url, {
+        headers: { "Authorization": `Bearer ${localStorage.getItem("token")}` }
+      });
+      if (!response.ok) throw new Error("Error al descargar archivo");
+      const blob = await response.blob();
+      const blobUrl = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = blobUrl;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(blobUrl);
+      document.body.removeChild(a);
+    } catch (e) {
+      console.error(e);
+      alert("Error al generar el reporte.");
+    }
   };
 
-  const downloadDeclaracion = () => {
-    const a = document.createElement('a');
-    a.href = `/api/finanzas/declaracion-ingresos-mensual`;
-    a.download = `Declaracion_Ingresos_Mes.pdf`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-  };
+  const downloadPDF = () => downloadFile(`/api/finanzas/reporte-pdf`, `Reporte_Patrimonial_DonBeni.pdf`);
+  const downloadDeclaracion = () => downloadFile(`/api/finanzas/declaracion-ingresos-mensual`, `Declaracion_Ingresos_Mes.pdf`);
 
   if (loading) return <div className="p-10 text-center animate-pulse">Cargando estado financiero...</div>;
 

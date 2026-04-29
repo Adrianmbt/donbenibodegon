@@ -29,7 +29,11 @@ const Login = () => {
       localStorage.setItem("token", data.access_token);
       const parts = data.access_token.split('.');
       const payload = JSON.parse(atob(parts[1]));
-      login({ username: payload.sub, rol: payload.rol });
+      login({ 
+        username: payload.sub, 
+        rol: payload.rol, 
+        tienda_id: payload.tienda_id 
+      });
     } catch (err) {
       setError(err.message);
     } finally {

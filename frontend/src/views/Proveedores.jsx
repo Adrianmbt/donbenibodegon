@@ -12,7 +12,9 @@ const Proveedores = () => {
 
   const fetchProveedores = async () => {
     try {
-      const response = await fetch("/api/proveedores/");
+      const response = await fetch("/api/proveedores/", {
+        headers: { "Authorization": `Bearer ${localStorage.getItem("token")}` }
+      });
       const data = await response.json();
       setProveedores(data);
     } catch (err) {
@@ -31,7 +33,10 @@ const Proveedores = () => {
     try {
       const resp = await fetch("/api/proveedores/", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { 
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${localStorage.getItem("token")}`
+        },
         body: JSON.stringify(nuevoProveedor)
       });
       if (resp.ok) {

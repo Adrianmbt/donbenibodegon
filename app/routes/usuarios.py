@@ -29,9 +29,10 @@ def obtener_usuario_actual(token: str = Depends(oauth2_scheme)) -> dict:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         username: str = payload.get("sub")
         rol: str = payload.get("rol")
+        tienda_id: int = payload.get("tienda_id")
         if username is None:
             raise HTTPException(status_code=401, detail="Token inválido")
-        return {"username": username, "rol": rol}
+        return {"username": username, "rol": rol, "tienda_id": tienda_id}
     except JWTError:
         raise HTTPException(status_code=401, detail="Error de autenticación")
 
@@ -57,7 +58,11 @@ def login(
     if not user or not verificar_password(form_data.password, user.password_hash):
         raise HTTPException(status_code=400, detail="Usuario o contraseña incorrectos")
 
-    access_token = crear_token_acceso(data={"sub": user.username, "rol": user.rol})
+    access_token = crear_token_acceso(data={
+        "sub": user.username, 
+        "rol": user.rol,
+        "tienda_id": user.tienda_id
+    })
     return {"access_token": access_token, "token_type": "bearer"}
 
 
@@ -76,6 +81,7 @@ def crear_usuario(data: UsuarioCreate, session: Session = Depends(get_session)):
         nombre=data.nombre,
         password_hash=obtener_password_hash(data.password),
         rol=data.rol,
+        tienda_id=data.tienda_id
     )
     session.add(nuevo)
     session.commit()
@@ -91,12 +97,22 @@ def listar_usuarios(
 ):
     """Lista usuarios según el rol del solicitante."""
     rol_solicitante = usuario_actual.get("rol", "").lower()
+    tienda_id = usuario_actual.get("tienda_id")
+
     if rol_solicitante == "dev":
         # Dev ve a todo el mundo
         return session.exec(select(Usuario)).all()
+    elif rol_solicitante == "propietario":
+        # Propietario ve a todos
+        return session.exec(select(Usuario)).all()
     elif rol_solicitante == "admin":
-        # Admin ve a todos menos a los dev
-        return session.exec(select(Usuario).where(Usuario.rol != "dev")).all()
+        # Admin ve a todos los de su tienda menos a los dev/propietario
+        return session.exec(
+            select(Usuario).where(
+                Usuario.tienda_id == tienda_id, 
+                Usuario.rol.notin_(["dev", "propietario"])
+            )
+        ).all()
     else:
         # Vendedor no debería ver la lista de usuarios
         raise HTTPException(status_code=403, detail="No tienes permisos para ver esta lista")
@@ -177,6 +193,9 @@ def actualizar_usuario(
 
     if data.rol is not None:
         usuario.rol = data.rol
+
+    if data.tienda_id is not None:
+        usuario.tienda_id = data.tienda_id
 
     session.add(usuario)
     session.commit()

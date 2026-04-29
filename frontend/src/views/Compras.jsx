@@ -32,10 +32,11 @@ const Compras = () => {
 
   const fetchData = async () => {
     try {
+      const headers = { "Authorization": `Bearer ${localStorage.getItem("token")}` };
       const [resProv, resProd, resHist] = await Promise.all([
-        fetch("/api/proveedores/"),
-        fetch("/api/inventario/productos"),
-        fetch("/api/compras/historial")
+        fetch("/api/proveedores/", { headers }),
+        fetch("/api/inventario/productos", { headers }),
+        fetch("/api/compras/historial", { headers })
       ]);
       setProveedores(await resProv.json());
       setProductos(await resProd.json());
@@ -46,7 +47,10 @@ const Compras = () => {
   const handleEliminarCompra = async (id) => {
     if (!window.confirm("¿Estás seguro de eliminar este registro de compra?")) return;
     try {
-      const res = await fetch(`/api/compras/${id}`, { method: "DELETE" });
+      const res = await fetch(`/api/compras/${id}`, { 
+        method: "DELETE",
+        headers: { "Authorization": `Bearer ${localStorage.getItem("token")}` }
+      });
       if (res.ok) fetchData();
       else alert("Error al eliminar");
     } catch (e) { console.error(e); }
@@ -57,7 +61,10 @@ const Compras = () => {
     try {
       const res = await fetch(`/api/compras/${compraAEditar.id}`, {
         method: "PATCH",
-        headers: { "Content-Type": "application/json" },
+        headers: { 
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${localStorage.getItem("token")}`
+        },
         body: JSON.stringify({
           estado: compraAEditar.estado,
           monto_total: compraAEditar.monto_total,
@@ -74,13 +81,21 @@ const Compras = () => {
   };
 
   // Filtrar productos por el proveedor seleccionado
-  const productosFiltrados = productos.filter(p =>
-    !proveedorSeleccionado || p.proveedor_id === proveedorSeleccionado.id || !p.proveedor_id
+  const productosFiltrados = productos.filter(pt =>
+    !proveedorSeleccionado || pt.producto?.proveedor_id === proveedorSeleccionado.id || !pt.producto?.proveedor_id
   );
 
-  const agregarAlCarrito = (prod) => {
-    if (!carrito.find(i => i.id === prod.id)) {
-      setCarrito([...carrito, { ...prod, cantidad: 1, costo: prod.costo_usd || 0, es_caja: false }]);
+  const agregarAlCarrito = (pt) => {
+    if (!carrito.find(i => i.id === pt.producto_id)) {
+      setCarrito([...carrito, { 
+        id: pt.producto_id, 
+        nombre: pt.producto.nombre, 
+        costo: pt.costo_usd || 0,
+        unidades_por_caja: pt.producto.unidades_por_caja,
+        es_licor: pt.producto.es_licor,
+        cantidad: 1, 
+        es_caja: false 
+      }]);
     }
   };
 
@@ -96,7 +111,10 @@ const Compras = () => {
     try {
       const res = await fetch("/api/compras/registrar", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { 
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${localStorage.getItem("token")}`
+        },
         body: JSON.stringify({
           proveedor_id: proveedorSeleccionado.id,
           items: carrito.map(i => ({ 
@@ -112,13 +130,7 @@ const Compras = () => {
       if (res.ok) {
         const data = await res.json();
         if (data.compra_id) {
-          // Descarga directa same-origin via proxy - Chrome respeta Content-Disposition
-          const a = document.createElement('a');
-          a.href = `/api/compras/pdf/${data.compra_id}`;
-          a.download = `Recibo_DonBeni_${data.compra_id}.pdf`;
-          document.body.appendChild(a);
-          a.click();
-          document.body.removeChild(a);
+          downloadPDF(data.compra_id);
         }
         setView("list");
         setCarrito([]);
@@ -140,28 +152,40 @@ const Compras = () => {
     try {
       const res = await fetch("/api/inventario/productos", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { 
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${localStorage.getItem("token")}`
+        },
         body: JSON.stringify({ ...nuevoProd, proveedor_id: proveedorSeleccionado.id })
       });
       if (res.ok) {
-        const prod = await res.json();
-        setProductos([...productos, prod]);
-        agregarAlCarrito(prod);
+        const pt = await res.json();
+        setProductos([...productos, pt]);
+        agregarAlCarrito(pt);
         setModalNuevoProd(false);
       }
     } catch (e) { alert("Error al crear producto"); }
   };
 
-  // Descarga robusta usando iframe oculto (solución definitiva para .tmp)
-  const downloadPDF = (compraId) => {
-    let iframe = document.getElementById('pdf-download-iframe');
-    if (!iframe) {
-      iframe = document.createElement('iframe');
-      iframe.id = 'pdf-download-iframe';
-      iframe.style.display = 'none';
-      document.body.appendChild(iframe);
+  const downloadPDF = async (compraId) => {
+    try {
+      const response = await fetch(`/api/compras/pdf/${compraId}`, {
+        headers: { "Authorization": `Bearer ${localStorage.getItem("token")}` }
+      });
+      if (!response.ok) throw new Error("Error al descargar PDF");
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `Compra_${compraId}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+    } catch (e) {
+      console.error(e);
+      alert("Error al descargar el PDF de la compra.");
     }
-    iframe.src = `/api/compras/pdf/${compraId}`;
   };
 
   const totalPages = Math.ceil(historialCompras.length / itemsPerPage) || 1;
@@ -305,15 +329,15 @@ const Compras = () => {
                 <button onClick={() => setModalNuevoProd(true)} className="text-[8px] font-black uppercase text-on-surface-variant hover:text-primary transition-colors">Añadir Mercancía Nueva</button>
               </div>
               <div className="flex-1 overflow-y-auto space-y-2 custom-scrollbar">
-                {productosFiltrados.map(prod => (
+                {productosFiltrados.map(pt => (
                   <button
-                    key={prod.id}
-                    onClick={() => agregarAlCarrito(prod)}
+                    key={pt.id}
+                    onClick={() => agregarAlCarrito(pt)}
                     className="w-full p-4 bg-background rounded-xl border border-white/5 hover:border-primary/40 transition-all flex items-center justify-between group"
                   >
                     <div className="text-left">
-                      <p className="font-bold text-[11px] leading-tight">{prod.nombre}</p>
-                      <p className="text-[9px] text-on-surface-variant/40 mt-1 uppercase font-black">Ref: {prod.barcode}</p>
+                      <p className="font-bold text-[11px] leading-tight">{pt.producto?.nombre}</p>
+                      <p className="text-[9px] text-on-surface-variant/40 mt-1 uppercase font-black">Ref: {pt.producto?.barcode}</p>
                     </div>
                     <span className="material-symbols-outlined text-primary scale-0 group-hover:scale-100 transition-transform text-sm">add_circle</span>
                   </button>
@@ -403,8 +427,24 @@ const Compras = () => {
             <h4 className="text-2xl font-black mb-6">Proveedor <span className="text-primary">Nuevo</span></h4>
             <form onSubmit={async (e) => {
               e.preventDefault();
-              const res = await fetch("/api/proveedores/", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(nuevoProv) });
-              if (res.ok) { const d = await res.json(); setProveedores([...proveedores, d]); setProveedorSeleccionado(d); setModalNuevoProv(false); }
+              try {
+                const res = await fetch("/api/proveedores/", { 
+                  method: "POST", 
+                  headers: { 
+                    "Content-Type": "application/json",
+                    "Authorization": `Bearer ${localStorage.getItem("token")}`
+                  }, 
+                  body: JSON.stringify(nuevoProv) 
+                });
+                if (res.ok) { 
+                  const d = await res.json(); 
+                  setProveedores([...proveedores, d]); 
+                  setProveedorSeleccionado(d); 
+                  setModalNuevoProv(false); 
+                } else {
+                  alert("Error al crear proveedor");
+                }
+              } catch (e) { console.error(e); }
             }} className="space-y-4">
               <input required placeholder="RIF..." className="w-full bg-background border border-white/5 p-4 rounded-xl text-xs outline-none" value={nuevoProv.rif} onChange={e => setNuevoProv({ ...nuevoProv, rif: e.target.value })} />
               <input required placeholder="Razón Social..." className="w-full bg-background border border-white/5 p-4 rounded-xl text-xs outline-none" value={nuevoProv.nombre} onChange={e => setNuevoProv({ ...nuevoProv, nombre: e.target.value })} />

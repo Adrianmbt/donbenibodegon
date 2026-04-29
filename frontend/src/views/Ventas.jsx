@@ -34,9 +34,10 @@ const Ventas = () => {
 
   const fetchData = async () => {
     try {
+      const headers = { "Authorization": `Bearer ${localStorage.getItem("token")}` };
       const [resProd, resHist, resTasa] = await Promise.all([
-        fetch("/api/inventario/productos"),
-        fetch("/api/ventas/historial"),
+        fetch("/api/inventario/productos", { headers }),
+        fetch("/api/ventas/historial", { headers }),
         fetch("/api/bcv/tasa")
       ]);
       setProductos(await resProd.json());
@@ -48,16 +49,26 @@ const Ventas = () => {
     }
   };
 
-  const agregarAlCarrito = (producto) => {
-    const existe = carrito.find(item => item.id === producto.id);
+  const agregarAlCarrito = (pt) => {
+    const existe = carrito.find(item => item.id === pt.producto_id);
     if (existe) {
-      if (existe.cantidad + 1 > producto.stock) return alert("Stock insuficiente");
+      if (existe.cantidad + 1 > pt.stock) return alert("Stock insuficiente");
       setCarrito(carrito.map(item =>
-        item.id === producto.id ? { ...item, cantidad: item.cantidad + 1 } : item
+        item.id === pt.producto_id ? { ...item, cantidad: item.cantidad + 1 } : item
       ));
     } else {
-      if (producto.stock <= 0) return alert("Producto agotado");
-      setCarrito([...carrito, { ...producto, cantidad: 1, es_caja: false }]);
+      if (pt.stock <= 0) return alert("Producto agotado");
+      setCarrito([...carrito, { 
+        id: pt.producto_id, 
+        nombre: pt.producto.nombre, 
+        stock: pt.stock, 
+        precio_usd: pt.precio_usd,
+        precio_caja_usd: pt.precio_caja_usd,
+        es_licor: pt.producto.es_licor,
+        unidades_por_caja: pt.producto.unidades_por_caja,
+        cantidad: 1, 
+        es_caja: false 
+      }]);
     }
   };
 
@@ -80,10 +91,10 @@ const Ventas = () => {
         const currentCant = parseInt(item.cantidad) || 0;
         const nuevaCant = currentCant + delta;
         if (nuevaCant < 1) return { ...item, cantidad: 1 };
-        const prodOriginal = productos.find(p => p.id === id);
-        if (nuevaCant > prodOriginal.stock) {
+        const pt = productos.find(p => p.producto_id === id);
+        if (nuevaCant > pt.stock) {
           alert("Limite de stock alcanzado");
-          return { ...item, cantidad: prodOriginal.stock };
+          return { ...item, cantidad: pt.stock };
         }
         return { ...item, cantidad: nuevaCant };
       }
@@ -101,10 +112,10 @@ const Ventas = () => {
     
     setCarrito(carrito.map(item => {
       if (item.id === id) {
-        const prodOriginal = productos.find(p => p.id === id);
-        if (nuevaCant > prodOriginal.stock) {
+        const pt = productos.find(p => p.producto_id === id);
+        if (nuevaCant > pt.stock) {
           alert("Limite de stock alcanzado");
-          return { ...item, cantidad: prodOriginal.stock };
+          return { ...item, cantidad: pt.stock };
         }
         return { ...item, cantidad: nuevaCant };
       }
@@ -124,7 +135,10 @@ const Ventas = () => {
     try {
       const response = await fetch("/api/ventas/procesar", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { 
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${localStorage.getItem("token")}`
+        },
         body: JSON.stringify({
           items: carrito.map(i => ({ 
             producto_id: i.id, 
@@ -208,7 +222,10 @@ const Ventas = () => {
     const executeDelete = async () => {
       if (!window.confirm("¿Estás seguro de cancelar esta venta? El stock será devuelto al inventario.")) return;
       try {
-        const res = await fetch(`/api/ventas/${ventaId}`, { method: "DELETE" });
+        const res = await fetch(`/api/ventas/${ventaId}`, { 
+          method: "DELETE",
+          headers: { "Authorization": `Bearer ${localStorage.getItem("token")}` }
+        });
         if (res.ok) fetchData();
         else alert("Error al cancelar venta");
       } catch (e) { console.error(e); }
@@ -222,7 +239,7 @@ const Ventas = () => {
   };
 
   const productosFiltrados = productos.filter(p =>
-    p.nombre.toLowerCase().includes(searchQuery.toLowerCase()) || p.barcode.includes(searchQuery)
+    p.producto?.nombre?.toLowerCase().includes(searchQuery.toLowerCase()) || p.producto?.barcode?.includes(searchQuery)
   );
 
   let preFiltradas = historialVentas;
@@ -397,7 +414,7 @@ const Ventas = () => {
                 onKeyDown={(e) => {
                   if (e.key === "Enter" && searchQuery.trim() !== "") {
                     // Buscar coincidencia exacta por barcode
-                    const found = productos.find(p => p.barcode === searchQuery.trim());
+                    const found = productos.find(p => p.producto?.barcode === searchQuery.trim());
                     if (found) {
                       agregarAlCarrito(found);
                       updateSearch(""); // Limpiar para el siguiente escaneo
@@ -410,29 +427,29 @@ const Ventas = () => {
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 overflow-y-auto pr-2 custom-scrollbar flex-1 pb-10">
-              {productosFiltrados.map(producto => (
+              {productosFiltrados.map(pt => (
                 <button
-                  key={producto.id}
-                  onClick={() => agregarAlCarrito(producto)}
-                  disabled={producto.stock <= 0}
-                  className={`p-6 rounded-[2.5rem] border text-left transition-all group relative overflow-hidden flex flex-col justify-between h-52 shadow-xl ${producto.stock <= 0
+                  key={pt.id}
+                  onClick={() => agregarAlCarrito(pt)}
+                  disabled={pt.stock <= 0}
+                  className={`p-6 rounded-[2.5rem] border text-left transition-all group relative overflow-hidden flex flex-col justify-between h-52 shadow-xl ${pt.stock <= 0
                       ? 'bg-surface/50 border-white/2 opacity-50 cursor-not-allowed'
                       : 'bg-surface border-white/5 hover:border-primary/50 active:scale-95'
                     }`}
                 >
                   <div>
                     <div className="flex justify-between items-start mb-2">
-                      <span className="text-[10px] font-black uppercase tracking-widest text-on-surface-variant/60">{producto.barcode}</span>
-                      <span className={`px-2 py-0.5 rounded text-[8px] font-bold uppercase ${producto.stock <= 5 ? 'bg-error text-on-error' : 'bg-primary/10 text-primary'}`}>
-                        {producto.stock} en stock
+                      <span className="text-[10px] font-black uppercase tracking-widest text-on-surface-variant/60">{pt.producto?.barcode}</span>
+                      <span className={`px-2 py-0.5 rounded text-[8px] font-bold uppercase ${pt.stock <= pt.stock_minimo ? 'bg-error text-on-error' : 'bg-primary/10 text-primary'}`}>
+                        {pt.stock} en stock
                       </span>
                     </div>
-                    <h3 className="font-bold text-lg text-on-surface line-clamp-2 leading-tight group-hover:text-primary transition-colors">{producto.nombre}</h3>
+                    <h3 className="font-bold text-lg text-on-surface line-clamp-2 leading-tight group-hover:text-primary transition-colors">{pt.producto?.nombre}</h3>
                   </div>
                   <div className="flex justify-between items-end">
                     <div className="flex flex-col">
-                      <span className="text-3xl font-black font-mono text-primary">${producto.precio_usd.toFixed(2)}</span>
-                      <span className="text-[10px] font-bold text-on-surface-variant/60">{(producto.precio_usd * tasaBcv).toFixed(2)} Bs</span>
+                      <span className="text-3xl font-black font-mono text-primary">${pt.precio_usd.toFixed(2)}</span>
+                      <span className="text-[10px] font-bold text-on-surface-variant/60">{(pt.precio_usd * tasaBcv).toFixed(2)} Bs</span>
                     </div>
                     <div className="bg-primary/20 p-3 rounded-2xl group-hover:bg-primary group-hover:text-on-primary transition-all">
                       <span className="material-symbols-outlined text-sm">add_shopping_cart</span>
@@ -529,11 +546,12 @@ const Ventas = () => {
                         <option value="Efectivo">Efectivo 💵</option>
                         <option value="Punto de Venta">Punto 💳</option>
                         <option value="Pago Móvil">Pago Móvil ⚡</option>
+                        <option value="Biopago">Biopago 👆</option>
                         <option value="Divisa">Divisa (Efectivo $) 💰</option>
                         <option value="Crédito">A Crédito (Fiado) 📝</option>
                       </select>
                     </div>
-                    {(metodoPago === "Punto de Venta" || metodoPago === "Pago Móvil") && (
+                    {(metodoPago === "Punto de Venta" || metodoPago === "Pago Móvil" || metodoPago === "Biopago") && (
                       <div className="w-full">
                         <input 
                           type="text" 
@@ -551,8 +569,8 @@ const Ventas = () => {
 
               <button
                 onClick={handleProcesarVenta}
-                disabled={procesando || carrito.length === 0 || ((metodoPago === "Punto de Venta" || metodoPago === "Pago Móvil") && referencia.trim() === "")}
-                className={`w-full py-7 rounded-[2rem] font-black text-xs uppercase tracking-[0.3em] transition-all flex items-center justify-center gap-4 shadow-3xl disabled:opacity-20 ${procesando || carrito.length === 0 || ((metodoPago === "Punto de Venta" || metodoPago === "Pago Móvil") && referencia.trim() === "")
+                disabled={procesando || carrito.length === 0 || ((metodoPago === "Punto de Venta" || metodoPago === "Pago Móvil" || metodoPago === "Biopago") && referencia.trim() === "")}
+                className={`w-full py-7 rounded-[2rem] font-black text-xs uppercase tracking-[0.3em] transition-all flex items-center justify-center gap-4 shadow-3xl disabled:opacity-20 ${procesando || carrito.length === 0 || ((metodoPago === "Punto de Venta" || metodoPago === "Pago Móvil" || metodoPago === "Biopago") && referencia.trim() === "")
                     ? 'bg-surface text-on-surface-variant/20 cursor-not-allowed'
                     : 'bg-primary text-on-primary hover:scale-[1.02] active:scale-[0.98] shadow-primary/20'
                   }`}

@@ -77,27 +77,48 @@ const Header = () => {
   };
   // --------------------------------------------------------------------------
 
+  const [tienda, setTienda] = useState(null);
+
+  useEffect(() => {
+    if (user?.tienda_id) {
+      fetch(`/api/tiendas/${user.tienda_id}`, {
+        headers: { "Authorization": `Bearer ${localStorage.getItem("token")}` }
+      })
+        .then(res => res.json())
+        .then(data => {
+          if (!data.detail) setTienda(data);
+        })
+        .catch(err => console.error("Error al obtener tienda:", err));
+    }
+  }, [user]);
+
   // Polling para obtener notificaciones de stock crítico (cada 30s)
   useEffect(() => {
     const checkNotifications = async () => {
       try {
-        const res = await fetch("/api/inventario/productos");
-        const products = await res.json();
+        const res = await fetch("/api/inventario/productos", {
+          headers: { "Authorization": `Bearer ${localStorage.getItem("token")}` }
+        });
+        const items = await res.json();
         
-        // Filtrar productos con stock crítico (<= 5) y no descartados
-        const criticalItems = products
-          .filter(p => p.stock <= 5 && !isDismissed(`stock-${p.id}`))
+        if (!Array.isArray(items)) {
+           console.error("Notificaciones: La respuesta no es un array", items);
+           return;
+        }
+
+        // Filtrar productos con stock crítico y no descartados
+        const criticalItems = items
+          .filter(p => p.stock <= p.stock_minimo && !isDismissed(`stock-${p.id}`))
           .map(p => ({
             id: `stock-${p.id}`,
             type: 'critical',
             title: 'Stock Crítico',
-            message: `El producto "${p.nombre}" tiene solo ${p.stock} unidades.`,
+            message: `El producto "${p.producto?.nombre}" tiene solo ${p.stock} unidades.`,
             time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
             link: '/inventario?filter=critical'
           }));
 
         setNotifications(prev => {
-          // Mantener solo las no descartadas y agregar las nuevas sin duplicar
           const validPrev = prev.filter(n => !isDismissed(n.id));
           const existingIds = new Set(validPrev.map(n => n.id));
           const newOnes = criticalItems.filter(n => !existingIds.has(n.id));
@@ -106,10 +127,12 @@ const Header = () => {
       } catch (e) { console.error(e); }
     };
 
-    checkNotifications();
-    const interval = setInterval(checkNotifications, 30000);
-    return () => clearInterval(interval);
-  }, []);
+    if (user) {
+      checkNotifications();
+      const interval = setInterval(checkNotifications, 30000);
+      return () => clearInterval(interval);
+    }
+  }, [user]);
 
   const handleSearchChange = (e) => {
     const query = e.target.value;
@@ -136,6 +159,12 @@ const Header = () => {
   return (
     <header className="fixed top-0 right-0 w-[calc(100%-16rem)] h-16 bg-surface/80 backdrop-blur-xl dark:bg-surface/80 flex justify-between items-center px-10 border-b border-outline-variant/15 z-40">
       <div className="flex items-center gap-8">
+        {tienda && (
+          <div className="flex flex-col border-r border-outline-variant/20 pr-6">
+            <span className="text-[10px] text-primary tracking-widest font-black uppercase">{tienda.nombre}</span>
+            <span className="text-[8px] text-on-surface-variant/40 uppercase tracking-tighter">Sede Activa</span>
+          </div>
+        )}
         <div className="relative flex items-center bg-surface-container-low rounded-full px-5 py-2.5 border border-outline-variant/30 transition-all focus-within:border-primary/50 focus-within:ring-4 focus-within:ring-primary/10 group shadow-sm">
           <span className="material-symbols-outlined text-on-surface-variant/40 text-sm group-focus-within:text-primary transition-colors">search</span>
           <input 
