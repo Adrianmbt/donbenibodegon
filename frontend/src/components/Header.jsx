@@ -2,10 +2,12 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useSearch } from '../context/SearchContext';
+import { useTheme } from '../context/ThemeContext';
 
 const Header = () => {
   const { user, logout } = useAuth();
   const { searchQuery, updateSearch } = useSearch();
+  const { theme, resetBrandSelection } = useTheme();
   const navigate = useNavigate();
   const location = useLocation();
   const [tasa, setTasa] = useState(457.07);
@@ -273,8 +275,17 @@ const Header = () => {
                        <span className="text-[10px] font-black uppercase tracking-widest text-left">Mi Perfil</span>
                        <span className="material-symbols-outlined text-sm group-hover/item:rotate-12 transition-transform">person</span>
                     </button>
+                    {(user?.rol === 'dev' || user?.rol === 'propietario') && (
+                      <button 
+                        onClick={resetBrandSelection}
+                        className="w-full flex items-center justify-between p-3.5 rounded-2xl hover:bg-primary/10 text-primary transition-all group/item"
+                      >
+                         <span className="text-[10px] font-black uppercase tracking-widest">Cambiar Sede</span>
+                         <span className="material-symbols-outlined text-sm group-hover/item:rotate-180 transition-transform">sync</span>
+                      </button>
+                    )}
                     <button 
-                      onClick={logout}
+                      onClick={() => { resetBrandSelection(); logout(); }}
                       className="w-full flex items-center justify-between p-3.5 rounded-2xl hover:bg-error/10 text-error transition-all group/item"
                     >
                        <span className="text-[10px] font-black uppercase tracking-widest">Cerrar Sesión</span>

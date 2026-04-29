@@ -201,6 +201,47 @@ const Mantenimiento = () => {
     } catch { swalErr('Error al revocar licencia'); }
   };
 
+  const handleLimpiarDB = async () => {
+    const result = await swalConfirm(
+      '⚠️ LIMPIAR BASE DE DATOS',
+      'Esta acción ELIMINARÁ todos los productos, ventas, clientes y deudas. Solo se conservarán los usuarios y licencias. ESTA ACCIÓN ES IRREVERSIBLE.'
+    );
+    if (!result.isConfirmed) return;
+    try {
+      const res = await fetch(API('/limpiar-datos'), { method: 'POST', headers });
+      const data = await res.json();
+      if (!res.ok) { swalErr(data.detail || 'Error al limpiar'); return; }
+      swalOk('Base de datos limpiada con éxito');
+      fetchDbStatus();
+    } catch { swalErr('Error crítico al conectar'); }
+  };
+
+  const handleExportSQLite = async () => {
+    const result = await swalConfirm(
+      'Exportar a SQLite',
+      'Se generará un archivo SQLite con TODOS los datos actuales de PostgreSQL. Esto puede tomar unos segundos.'
+    );
+    if (!result.isConfirmed) return;
+    try {
+      const res = await fetch(API('/exportar-sqlite'), { method: 'POST', headers });
+      if (!res.ok) {
+        const d = await res.json();
+        swalErr(d.detail || 'Error al exportar');
+        return;
+      }
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `DonBeni_${new Date().toISOString().slice(0, 10)}.sqlite3`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      window.URL.revokeObjectURL(url);
+      swalOk('Base de datos SQLite exportada correctamente');
+    } catch (e) { swalErr('Error exportando: ' + e.message); }
+  };
+
   const handleDownloadPdf = async () => {
     setLoadingPdf(true);
     try {
@@ -355,6 +396,22 @@ const Mantenimiento = () => {
                 </div>
               </button>
 
+              {/* Limpiar DB (Solo Dev) */}
+              {user?.rol === 'dev' && (
+                <button
+                  onClick={handleLimpiarDB}
+                  className="flex items-center gap-4 p-6 bg-background rounded-3xl border-2 border-error/20 hover:border-error transition-all text-left group animate-pulse hover:animate-none"
+                >
+                  <div className="bg-error p-4 rounded-2xl text-on-error">
+                    <span className="material-symbols-outlined">dangerous</span>
+                  </div>
+                  <div>
+                    <p className="font-black text-sm text-error">LIMPIAR TODO</p>
+                    <p className="text-xs opacity-40">Borrar stock, ventas y deudas (Reset)</p>
+                  </div>
+                </button>
+              )}
+
             </div>
           </div>
 
@@ -362,7 +419,7 @@ const Mantenimiento = () => {
           {generatedKey && (
             <div className="fixed inset-0 bg-background/90 backdrop-blur-3xl z-[600] flex items-center justify-center p-6 animate-in zoom-in-95 duration-300">
               <div className="bg-surface w-full max-w-lg rounded-[3.5rem] p-12 border border-primary/20 shadow-3xl relative overflow-hidden">
-                
+
                 {/* Decoración de fondo */}
                 <div className="absolute -right-10 -top-10 opacity-5">
                   <span className="material-symbols-outlined text-[15rem] text-primary">key</span>
@@ -382,14 +439,14 @@ const Mantenimiento = () => {
                 <div className="flex gap-3 mb-10">
                   <div className="flex items-center gap-2 bg-[#3776AB]/20 border border-[#3776AB]/30 px-5 py-2.5 rounded-full">
                     <svg viewBox="0 0 48 48" className="w-5 h-5" fill="none">
-                      <path d="M24.047 5c-1.555.005-3.111.159-4.571.449C15.56 6.367 14.907 8.144 14.6 9.877c-.271 1.8-.405 3.63-.405 3.63H24v1.218H10.07S6.993 14.5 5.9 18.824c-1.064 4.183.985 6.6.985 6.6s.925 1.53 3.16 1.53h2.007v-3.69s-.11-3.14 3.07-3.14h9.91s2.97.048 2.97-2.88V9.116s.505-4.116-3.955-4.116zm-5.49 2.371a1.218 1.218 0 1 1 0 2.437 1.218 1.218 0 0 1 0-2.437z" fill="#3776AB"/>
-                      <path d="M24.953 43c1.555-.005 3.111-.159 4.571-.449 3.916-.918 4.569-2.695 4.876-4.428.271-1.8.405-3.63.405-3.63H24v-1.218h13.93s3.077.225 4.17-4.099c1.064-4.183-.985-6.6-.985-6.6s-.924-1.53-3.16-1.53h-2.006v3.69s.11 3.14-3.07 3.14h-9.91s-2.97-.048-2.97 2.88v9.128S19.494 43 23.954 43zm5.49-2.371a1.218 1.218 0 1 1 0-2.437 1.218 1.218 0 0 1 0 2.437z" fill="#FFD43B"/>
+                      <path d="M24.047 5c-1.555.005-3.111.159-4.571.449C15.56 6.367 14.907 8.144 14.6 9.877c-.271 1.8-.405 3.63-.405 3.63H24v1.218H10.07S6.993 14.5 5.9 18.824c-1.064 4.183.985 6.6.985 6.6s.925 1.53 3.16 1.53h2.007v-3.69s-.11-3.14 3.07-3.14h9.91s2.97.048 2.97-2.88V9.116s.505-4.116-3.955-4.116zm-5.49 2.371a1.218 1.218 0 1 1 0 2.437 1.218 1.218 0 0 1 0-2.437z" fill="#3776AB" />
+                      <path d="M24.953 43c1.555-.005 3.111-.159 4.571-.449 3.916-.918 4.569-2.695 4.876-4.428.271-1.8.405-3.63.405-3.63H24v-1.218h13.93s3.077.225 4.17-4.099c1.064-4.183-.985-6.6-.985-6.6s-.924-1.53-3.16-1.53h-2.006v3.69s.11 3.14-3.07 3.14h-9.91s-2.97-.048-2.97 2.88v9.128S19.494 43 23.954 43zm5.49-2.371a1.218 1.218 0 1 1 0-2.437 1.218 1.218 0 0 1 0 2.437z" fill="#FFD43B" />
                     </svg>
                     <span className="text-[10px] font-black uppercase tracking-widest text-[#3776AB]">Python</span>
                   </div>
                   <div className="flex items-center gap-2 bg-[#009688]/20 border border-[#009688]/30 px-5 py-2.5 rounded-full">
                     <svg viewBox="0 0 200 200" className="w-5 h-5">
-                      <polygon points="100,10 180,50 180,150 100,190 20,150 20,50" fill="#009688"/>
+                      <polygon points="100,10 180,50 180,150 100,190 20,150 20,50" fill="#009688" />
                       <text x="100" y="115" textAnchor="middle" fontSize="80" fill="white" fontWeight="bold">F</text>
                     </svg>
                     <span className="text-[10px] font-black uppercase tracking-widest text-[#009688]">FastAPI</span>
@@ -402,7 +459,7 @@ const Mantenimiento = () => {
                   <p className="text-3xl font-black text-primary tracking-[0.2em] break-all select-all leading-relaxed drop-shadow-[0_0_15px_rgba(234,179,8,0.2)]">
                     {generatedKey.clave}
                   </p>
-                  
+
                   <div className="flex justify-center gap-12 mt-8 pt-8 border-t border-white/5">
                     <div>
                       <p className="text-[10px] uppercase font-black opacity-30 mb-1">Duración</p>
@@ -450,7 +507,7 @@ const Mantenimiento = () => {
                 disabled={loadingPdf}
                 className="flex items-center gap-2 px-5 py-3 bg-primary/10 hover:bg-primary text-primary hover:text-on-primary rounded-2xl font-black text-[10px] uppercase tracking-widest transition-all disabled:opacity-50"
               >
-                {loadingPdf 
+                {loadingPdf
                   ? <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
                   : <span className="material-symbols-outlined text-sm">picture_as_pdf</span>}
                 Exportar PDF

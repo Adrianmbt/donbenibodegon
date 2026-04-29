@@ -3,7 +3,7 @@
 @import url('https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap');
 
 @theme {
-  /* Marca Don Beni: Oro y Azul/Negro Profundo */
+  /* Marca Don Beni: Oro y Azul/Negro Profundo (Default: Bodegón) */
   --color-primary: #D4AF37;           /* Oro del Logo */
   --color-primary-container: #F4D03F; /* Oro más brillante */
   --color-on-primary: #000000;
@@ -32,6 +32,26 @@
   --radius-lg: 0.5rem;
   --radius-xl: 1rem;
   --radius-full: 9999px;
+}
+
+/* Tema Minimarket: Orgánico Equilibrado (Verde Oliva Mudo y Carbón) */
+.theme-minimarket {
+  --color-primary: #8DA38A;           /* Verde Oliva Mudo / Sage */
+  --color-primary-container: #2D352D; /* Verde Bosque Oscuro */
+  --color-on-primary: #121412;
+  
+  --color-secondary: #D1B89A;         /* Crema Arena para acentos */
+  --color-background: #121412;        /* Carbón con matiz verde */
+  --color-surface: #1B1E1B;           /* Superficie Orgánica Oscura */
+  --color-surface-container: #242824; /* Contenedor Mudo */
+  --color-surface-container-low: #1B1E1B;
+  --color-surface-container-high: #2D332D;
+  
+  --color-on-surface: #E1E3DF;        /* Texto Off-white */
+  --color-on-surface-variant: #8E928A;/* Texto Gris Oliva */
+  --color-outline-variant: #2D332D;   /* Bordes Sutiles */
+  
+  --color-error: #FF5252;
 }
 
 

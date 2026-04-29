@@ -157,20 +157,20 @@ const Finanzas = () => {
               <div className="space-y-2">
                 <div className="flex justify-between text-xs font-black uppercase tracking-widest">
                   <span>Inventario</span>
-                  <span>{((stats.valor_inventario / stats.activos_totales) * 100).toFixed(1)}%</span>
+                  <span>{stats.activos_totales > 0 ? ((stats.valor_inventario / stats.activos_totales) * 100).toFixed(1) : "0.0"}%</span>
                 </div>
                 <div className="h-4 w-full bg-background rounded-full overflow-hidden">
-                  <div className="h-full bg-primary" style={{ width: `${(stats.valor_inventario / stats.activos_totales) * 100}%` }}></div>
+                  <div className="h-full bg-primary" style={{ width: `${stats.activos_totales > 0 ? (stats.valor_inventario / stats.activos_totales) * 100 : 0}%` }}></div>
                 </div>
               </div>
 
               <div className="space-y-2">
                 <div className="flex justify-between text-xs font-black uppercase tracking-widest text-secondary">
                   <span>Cuentas por Cobrar</span>
-                  <span>{((stats.cuentas_por_cobrar / stats.activos_totales) * 100).toFixed(1)}%</span>
+                  <span>{stats.activos_totales > 0 ? ((stats.cuentas_por_cobrar / stats.activos_totales) * 100).toFixed(1) : "0.0"}%</span>
                 </div>
                 <div className="h-4 w-full bg-background rounded-full overflow-hidden">
-                  <div className="h-full bg-secondary" style={{ width: `${(stats.cuentas_por_cobrar / stats.activos_totales) * 100}%` }}></div>
+                  <div className="h-full bg-secondary" style={{ width: `${stats.activos_totales > 0 ? (stats.cuentas_por_cobrar / stats.activos_totales) * 100 : 0}%` }}></div>
                 </div>
               </div>
             </div>
@@ -191,14 +191,14 @@ const Finanzas = () => {
              <div className="relative w-48 h-48 flex items-center justify-center">
                 <svg className="w-full h-full transform -rotate-90">
                   <circle cx="96" cy="96" r="88" stroke="currentColor" strokeWidth="12" fill="transparent" className="text-background" />
-                  <circle cx="96" cy="96" r="88" stroke="currentColor" strokeWidth="12" fill="transparent" strokeDasharray={552} strokeDashoffset={552 - (552 * (stats.cuentas_por_pagar / stats.activos_totales))} className="text-error" />
+                  <circle cx="96" cy="96" r="88" stroke="currentColor" strokeWidth="12" fill="transparent" strokeDasharray={552} strokeDashoffset={552 - (552 * (stats.activos_totales > 0 ? Math.min(stats.cuentas_por_pagar / stats.activos_totales, 1) : 0))} className="text-error" />
                 </svg>
                 <div className="absolute text-center">
-                  <p className="text-3xl font-black font-mono">{( (stats.cuentas_por_pagar / stats.activos_totales) * 100 ).toFixed(1)}%</p>
+                  <p className="text-3xl font-black font-mono">{stats.activos_totales > 0 ? ( (stats.cuentas_por_pagar / stats.activos_totales) * 100 ).toFixed(1) : "0.0"}%</p>
                   <p className="text-[8px] font-black uppercase tracking-widest text-on-surface-variant">Riesgo / Deuda</p>
                 </div>
              </div>
-             <p className="text-[10px] text-on-surface-variant/60 font-medium text-center px-10">Tu nivel de deuda representa el {((stats.cuentas_por_pagar / stats.activos_totales) * 100).toFixed(1)}% respecto a tus activos totales.</p>
+             <p className="text-[10px] text-on-surface-variant/60 font-medium text-center px-10">Tu nivel de deuda representa el {stats.activos_totales > 0 ? ((stats.cuentas_por_pagar / stats.activos_totales) * 100).toFixed(1) : "0.0"}% respecto a tus activos totales.</p>
           </div>
 
           <div className="pt-8 border-t border-white/5 space-y-4">

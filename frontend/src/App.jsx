@@ -6,6 +6,7 @@ import Sidebar from './components/Sidebar';
 import Header from './components/Header';
 import { AuthProvider } from './context/AuthContext';
 import { SearchProvider } from './context/SearchContext';
+import { ThemeProvider } from './context/ThemeContext';
 
 // Vistas
 import Dashboard from './views/Dashboard';
@@ -17,13 +18,16 @@ import Finanzas from './views/Finanzas';
 import Usuarios from './views/Usuarios';
 import Mantenimiento from './views/Mantenimiento';
 import Login from './views/Login';
+import BrandSelector from './views/BrandSelector';
 import { useAuth } from './context/AuthContext';
+import { useTheme } from './context/ThemeContext';
 import { Navigate } from 'react-router-dom';
 import { useState, useEffect } from 'react';
 
 // ── Guarda de licencia: bloquea admin/vendedor si no hay licencia activa ──────
 const LicenseGate = ({ children }) => {
   const { user, logout } = useAuth();
+  const { resetBrandSelection } = useTheme();
   const [licStatus, setLicStatus] = useState(null); // null=cargando, true=ok, false=bloqueado
   const [licInfo, setLicInfo] = useState(null);
 
@@ -73,7 +77,7 @@ const LicenseGate = ({ children }) => {
             </p>
           </div>
           <button
-            onClick={logout}
+            onClick={() => { resetBrandSelection(); logout(); }}
             className="w-full py-4 rounded-2xl bg-error/10 hover:bg-error text-error hover:text-on-error font-black text-xs uppercase tracking-widest transition-all flex items-center justify-center gap-2"
           >
             <span className="material-symbols-outlined text-sm">logout</span>
@@ -108,9 +112,13 @@ const DevOnly = ({ children }) => {
 
 const AppLayout = () => {
   const { user, loading } = useAuth();
+  const { brandSelected } = useTheme();
   
   if (loading) return <div className="min-h-screen bg-background flex items-center justify-center font-black animate-pulse opacity-20">INICIANDO SISTEMA...</div>;
   if (!user) return <Login />;
+
+  // Si es dev y no ha seleccionado marca, mostrar el selector
+  if (user.rol === 'dev' && !brandSelected) return <BrandSelector />;
 
   return (
     <LicenseGate>
@@ -147,9 +155,11 @@ export default function App() {
   return (
     <Router>
       <AuthProvider>
-        <SearchProvider>
-          <AppLayout />
-        </SearchProvider>
+        <ThemeProvider>
+          <SearchProvider>
+            <AppLayout />
+          </SearchProvider>
+        </ThemeProvider>
       </AuthProvider>
     </Router>
   );

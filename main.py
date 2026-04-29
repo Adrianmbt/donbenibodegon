@@ -70,6 +70,12 @@ async def serve_logo():
         if os.path.exists(p):
             return FileResponse(p)
 
+@app.get("/logo_minimarket.png")
+async def serve_logo_minimarket():
+    p = os.path.join(os.path.dirname(__file__), "logo_minimarket.png")
+    if os.path.exists(p):
+        return FileResponse(p)
+
 @app.get("/favicon.svg")
 async def serve_favicon():
     p = os.path.join(dist_path, "favicon.svg")
@@ -78,4 +84,4 @@ async def serve_favicon():
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run("main:app", host="127.0.0.1", port=8000, log_level="info")
+    uvicorn.run("main:app", host="0.0.0.0", port=8000, log_level="info")

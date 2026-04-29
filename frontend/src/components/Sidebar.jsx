@@ -1,6 +1,7 @@
 import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { useTheme } from '../context/ThemeContext';
 
 const SidebarLink = ({ to, icon, label }) => {
   const location = useLocation();
@@ -22,18 +23,29 @@ const SidebarLink = ({ to, icon, label }) => {
 
 const Sidebar = () => {
   const { user } = useAuth();
+  const { theme, toggleTheme, getLogo } = useTheme();
   const isAdmin = user?.rol === 'admin' || user?.rol === 'dev';
   const isDev = user?.rol === 'dev';
 
   return (
-    <aside className="h-screen w-64 fixed left-0 top-0 flex flex-col py-8 bg-surface dark:bg-surface font-headline text-sm tracking-tight z-50 shadow-2xl border-r border-white/5">
+    <aside className="h-screen w-64 fixed left-0 top-0 flex flex-col py-8 bg-surface dark:bg-surface font-headline text-sm tracking-tight z-50 shadow-2xl border-r border-white/5 transition-colors duration-500">
       <div className="px-8 mb-12 flex flex-col items-center">
-        <div className="w-20 h-20 rounded-full overflow-hidden border-2 border-primary shadow-lg shadow-primary/20 mb-4 bg-background">
-          <img src="/logo.jpg" alt="Don Beni Logo" className="w-full h-full object-cover" />
+        <div 
+          onClick={toggleTheme}
+          className="w-20 h-20 rounded-full overflow-hidden border-2 border-primary shadow-lg shadow-primary/20 mb-4 bg-background cursor-pointer hover:scale-110 transition-all relative group"
+        >
+          <img src={getLogo()} alt="Don Beni Logo" className="w-full h-full object-cover" />
+          <div className="absolute inset-0 bg-primary/20 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
+            <span className="material-symbols-outlined text-on-primary">sync</span>
+          </div>
         </div>
         <div className="text-center">
-          <span className="text-xl font-black tracking-tighter text-on-surface">DON BENI</span>
-          <p className="text-[8px] uppercase tracking-[0.3em] text-primary font-bold">Bodegón de Calidad</p>
+          <span className="text-xl font-black tracking-tighter text-on-surface uppercase">
+            {theme === 'bodegon' ? 'Don Beni' : 'Minimarket'}
+          </span>
+          <p className="text-[8px] uppercase tracking-[0.3em] text-primary font-bold">
+            {theme === 'bodegon' ? 'Bodegón de Calidad' : 'Frescura Diaria'}
+          </p>
         </div>
       </div>
 

@@ -61,6 +61,7 @@ def registrar_log(
     accion: str,
     entidad: str,
     detalle: str,
+    tienda_id: Optional[int] = None,
     autorizado_por: Optional[str] = None,
 ):
     """Utilidad reutilizable para grabar un AuditLog desde cualquier ruta."""
@@ -69,6 +70,7 @@ def registrar_log(
         accion=accion,
         entidad=entidad,
         detalle=detalle,
+        tienda_id=tienda_id,
         autorizado_por=autorizado_por,
     )
     session.add(log)
@@ -198,6 +200,28 @@ def limpiar_logs(
     session.exec(text("DELETE FROM auditlog"))
     session.commit()
     return {"message": f"{count} registros de auditoría eliminados."}
+    
+@router.post("/limpiar-datos")
+def limpiar_base_datos(
+    session: Session = Depends(get_session),
+    _: dict = Depends(solo_dev),
+):
+    """Limpia todas las tablas operativas excepto usuarios, tiendas y licencias."""
+    # Tablas a limpiar
+    tablas = [
+        "ventadetalle", "venta", "cuentaporcobrar", 
+        "cuentaporpagar", "productotienda", "producto", 
+        "proveedor", "auditlog"
+    ]
+    
+    try:
+        for tabla in tablas:
+            session.exec(text(f"TRUNCATE TABLE {tabla} RESTART IDENTITY CASCADE"))
+        session.commit()
+        return {"message": "Base de datos limpiada correctamente (excepto usuarios y licencias)"}
+    except Exception as e:
+        session.rollback()
+        raise HTTPException(status_code=500, detail=f"Error al limpiar DB: {str(e)}")
 
 
 # ── BACKUP ───────────────────────────────────────────────────
@@ -249,6 +273,80 @@ def hacer_backup(
         media_type="application/octet-stream",
     )
 
+
+@router.post("/exportar-sqlite")
+def exportar_sqlite(
+    _: dict = Depends(solo_dev),
+):
+    """
+    Exporta todos los datos de PostgreSQL a un archivo SQLite3 descargable.
+    Útil para la migración al empaquetado Electron.
+    """
+    import sqlite3
+    import tempfile
+
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    # Creamos un archivo temporal para el SQLite
+    tmp_dir = tempfile.mkdtemp()
+    sqlite_path = os.path.join(tmp_dir, f"donbeni_{timestamp}.sqlite3")
+
+    # Tablas a exportar en orden (respetando foreign keys)
+    tablas = [
+        "tienda", "usuario", "licencia", "proveedor", "producto",
+        "productotienda", "venta", "ventadetalle",
+        "cuentaporcobrar", "cuentaporpagar", "exchangerate", "auditlog"
+    ]
+
+    try:
+        # Conexión al SQLite destino
+        sqlite_conn = sqlite3.connect(sqlite_path)
+        sqlite_cur = sqlite_conn.cursor()
+
+        # Conexión al PostgreSQL origen (usando SQLAlchemy raw connection)
+        with engine.connect() as pg_conn:
+            for tabla in tablas:
+                try:
+                    # Obtener columnas
+                    col_result = pg_conn.execute(text(
+                        f"SELECT column_name FROM information_schema.columns "
+                        f"WHERE table_name = '{tabla}' AND table_schema = 'public' "
+                        f"ORDER BY ordinal_position"
+                    ))
+                    columnas = [row[0] for row in col_result]
+                    if not columnas:
+                        continue
+
+                    # Obtener datos
+                    rows_result = pg_conn.execute(text(f"SELECT * FROM {tabla}"))
+                    rows = rows_result.fetchall()
+
+                    # Crear tabla en SQLite
+                    col_defs = ", ".join(f'"{c}" TEXT' for c in columnas)
+                    sqlite_cur.execute(f'CREATE TABLE IF NOT EXISTS "{tabla}" ({col_defs})')
+
+                    # Insertar datos
+                    if rows:
+                        placeholders = ", ".join("?" * len(columnas))
+                        sqlite_cur.executemany(
+                            f'INSERT INTO "{tabla}" VALUES ({placeholders})',
+                            [tuple(str(v) if v is not None else None for v in row) for row in rows]
+                        )
+                except Exception as e:
+                    # Si una tabla falla (no existe), continuamos
+                    print(f"[export-sqlite] Tabla {tabla} omitida: {e}")
+                    continue
+
+        sqlite_conn.commit()
+        sqlite_conn.close()
+
+        return FileResponse(
+            path=sqlite_path,
+            filename=f"DonBeni_{timestamp}.sqlite3",
+            media_type="application/octet-stream",
+        )
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error exportando a SQLite: {str(e)}")
 
 # ── LICENCIAS ────────────────────────────────────────────────
 
