@@ -1,0 +1,47 @@
+{
+  "name": "donbeni",
+  "version": "1.0.0",
+  "description": "Sistema de Gestión Bodegón Don Beni",
+  "main": "electron-main.cjs",
+  "scripts": {
+    "start": "electron .",
+    "dev:backend": "venv\\Scripts\\python.exe main.py",
+    "dev:frontend": "npm run dev --prefix frontend",
+    "dev": "concurrently \"npm run dev:frontend\" \"npm run dev:backend\" \"wait-on http://localhost:5173 && electron .\"",
+    "build:frontend": "npm run build --prefix frontend",
+    "package": "npm run build:frontend && electron-builder"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "devDependencies": {
+    "concurrently": "^9.2.1",
+    "electron": "^41.0.3",
+    "electron-builder": "^26.8.1",
+    "electron-is-dev": "^3.0.1",
+    "playwright": "^1.58.2",
+    "wait-on": "^9.0.4"
+  },
+  "build": {
+    "appId": "com.donbeni.pos",
+    "productName": "Don Beni POS",
+    "win": {
+      "target": "dir",
+      "icon": "logo.jpg"
+    },
+    "files": [
+      "electron-main.cjs",
+      "main.py",
+      "app/**/*",
+      "frontend/dist/**/*",
+      "venv/**/*",
+      ".env",
+      "logo.jpg"
+    ],
+    "directories": {
+      "output": "dist-electron"
+    },
+    "asar": false
+  }
+}
